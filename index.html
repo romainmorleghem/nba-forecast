@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Who Will Win the NBA Title?</title>
+<meta name="description" content="A step-by-step explanation of a statistical model that forecasts the 2026-27 NBA champion, tested on the last eleven champions and updated during the season.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="style.css">
+<style>html { color-scheme: light dark; } body { margin: 0; } img { max-width: 100%; } [hidden] { display: none !important; }</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="eyebrow" id="hero-eyebrow">2026-27 season</div>
+  <h1>Who will win the NBA title?</h1>
+  <p class="lede">A personal forecasting project, explained step by step. The model estimates how strong each team is from its results and its players, then plays out the rest of the season 100,000 times. The forecast is updated three times between now and February 1.</p>
+
+  <div class="board" aria-label="Title favorites">
+    <div class="eyebrow" id="board-title">Title probability</div>
+    <div class="board-grid" id="board"></div>
+    <div class="board-foot" id="board-foot"></div>
+  </div>
+
+  <h2>The problem</h2>
+  <p>Predicting a champion means predicting about 1,000 regular-season games still to be played, a qualifying tournament (the <em>play-in</em>), then four rounds of best-of-seven playoff series. Nobody can say who will win. What we can say is <strong>how likely</strong> each outcome is, and that is what this project does.</p>
+  <p>The method has five steps. Each one is explained below with a worked example.</p>
+
+  <!-- ============ STEP 1 ============ -->
+  <span class="step-tag">Step 1</span>
+  <h2>Measure a team's strength in points</h2>
+  <p>The simplest approach would be to count wins. But a one-point win and a thirty-point win do not say the same thing. So the model uses the <strong>margin</strong>: the point difference at the final buzzer.</p>
+  <p>A team's <strong>strength</strong> is the average margin it would get against an average team, on a neutral court. A strength of +5 means "beats an ordinary team by 5 points on average". The best teams sit around +8 to +12, the weakest around −10.</p>
+  <p>Two more things matter for a specific game:</p>
+  <ul class="lim">
+    <li><strong>Home-court advantage</strong>: playing at home is worth about 1.9 points today. It was 3 points fifteen years ago. It has shrunk, and the model re-learns it every season from the three previous ones.</li>
+    <li><strong>Luck</strong>: even between equal teams, a game can end at +20 or −15. The actual margin typically misses the expected margin by about 14 points (this is the standard deviation, written σ).</li>
+  </ul>
+  <p>With these three ingredients we get a win probability. Try it:</p>
+
+  <div class="widget">
+    <label for="gap">Strength gap between the two teams: <span class="num" id="gap-v">+4.0</span> points</label>
+    <input type="range" id="gap" min="0" max="15" step="0.5" value="4">
+    <div class="wout">
+      <div><div class="eyebrow">1 game, neutral court</div><div class="wbig" id="p1">61%</div></div>
+      <div><div class="eyebrow">1 game, at home</div><div class="wbig" id="p2">66%</div></div>
+      <div><div class="eyebrow">Best-of-7 series</div><div class="wbig" id="p7">72%</div></div>
+    </div>
+    <p class="note" style="margin:10px 0 0">How it is computed: the margin follows a bell curve centered on the strength gap, with a width of σ = 14 points. The win probability is the share of the curve above zero. For a series, we need at least 4 wins out of 7 games (neutral court).</p>
+  </div>
+  <p><strong>Takeaway</strong>: a 4-point gap is already a good team against an average one, yet it wins only 6 games out of 10. A seven-game series reduces the role of luck without removing it. That is why a favorite is never sure to win the title.</p>
+
+  <!-- ============ STEP 2 ============ -->
+  <span class="step-tag">Step 2</span>
+  <h2>Before the first game: the players</h2>
+  <p>In October, no team has played yet. So the starting point comes from the players. Each player has a rating, <strong>BPM</strong> (<em>Box Plus-Minus</em>): an estimate, based on his box-score stats, of how many points he adds to his team per 100 possessions compared with an average player. A star is around +6 to +10; a typical bench player around −2.</p>
+  <p>For each player, we average his three previous seasons (the most recent counts most), adjusted for age: a 22-year-old improves, a 33-year-old declines. We then add up these ratings, weighted by the minutes each player is expected to play.</p>
+  <p>That sum is not the team's strength yet. We convert it with a <strong>regression</strong>: a formula of the form "strength = a × (player ratings) + b × (last season's strength) + …", whose coefficients are chosen to match past seasons as closely as possible. This is the only "machine learning" part of the project, and it is deliberately simple.</p>
+  <div class="example">
+    <div class="eyebrow">What it gives</div>
+    This starting estimate is off by about <strong>3 points</strong> on average. Useful, but not enough to pick a champion: 3 points is the difference between a title contender and a second-round team. The games will correct that error.
+  </div>
+
+  <!-- ============ STEP 3 ============ -->
+  <span class="step-tag">Step 3</span>
+  <h2>Every game corrects the estimate</h2>
+  <p>The model keeps more than one number per team: it also keeps <strong>how sure it is</strong> of that number. After each game, it compares the result with what it expected and moves its estimate toward the surprise. The key is how far it moves: a lot when the model knows the team poorly, a little when it knows the team well, and a little anyway because a single game is very noisy.</p>
+  <p>This method is called a <strong>Kalman filter</strong>. It was invented in the 1960s to track rocket trajectories from imprecise measurements, which is exactly our situation: a hidden quantity (strength) measured through very noisy results.</p>
+  <div class="example">
+    <div class="eyebrow">Worked example</div>
+    <p>The model thinks Boston is <strong>+5 ± 3</strong> points. Boston hosts an average team: the model expects a win by 5 + 1.9 = <strong>6.9 points</strong>. Boston wins by <strong>20</strong>. The surprise is 13.1 points.</p>
+    <div class="calc">
+      weight = 3² / (3² + 14²) = 9 / 205 = 0.044<br>
+      new strength = 5 + 0.044 × 13.1 = <strong>+5.6</strong><br>
+      new uncertainty = ± 2.9
+    </div>
+    <p style="margin:10px 0 0">A single game, even a spectacular one, changes almost nothing: luck (14 points) is much larger than the doubt about the team (3 points). What matters is the accumulation. After a dozen or so games, the uncertainty drops to about ±2.5 points; by the end of the season, to about ±2.</p>
+  </div>
+  <p>One last idea: teams change during a season (young players improve, fatigue, new tactics). So the model slightly increases its doubt every day, by about ±2.5 points over a full season. Without this, it would become overconfident and stop reacting late in the season.</p>
+  <details>
+    <summary>Going further: the formulas</summary>
+    <p>Margin of a game: <code>home_margin = θ_home − θ_away + hca + β·(absences_home − absences_away) + noise</code>, noise ~ N(0, σ²), σ ≈ 14 pts, hca ≈ 1.9 pts.</p>
+    <p>Home win probability: <code>Φ(expected margin / √(σ² + uncertainty on the strength gap))</code>, where Φ is the cumulative distribution function of the normal distribution.</p>
+    <p>The filter tracks the mean θ and the covariance matrix P (30 × 30) of all strengths. Gain: <code>K = P·H′ / S</code>, with H = (+1 for the home team, −1 for the away team) and S the variance of the predicted margin. Drift: the variance of each strength grows by q = 0.04 point² per day.</p>
+    <p>σ and hca are learned on the three previous seasons, the prior's error and β on past seasons. Only q is hand-tuned, on the reliability of the error bars.</p>
+  </details>
+
+  <!-- ============ STEP 4 ============ -->
+  <span class="step-tag">Step 4</span>
+  <h2>Who is playing tonight?</h2>
+  <p>A team without its star is not the same team. And absences are common in the NBA: injuries, but also planned rest for stars, which has become routine since 2020. So for every game, the model reads the player-by-player box score (more than 20,000 games since 2008) and knows who was available before tip-off.</p>
+  <p>It computes the <strong>cost of the absences</strong>: the value of the available players compared with that of the full roster. A player's value is his rating (BPM, updated with his games this season) times his usual minutes. The minutes left by a missing player are played by a bench-level replacement. The strength tracked by the filter becomes the strength <em>with the full roster</em>, and every game is adjusted for who actually played.</p>
+  <div class="example">
+    <div class="eyebrow">Example: Oklahoma City, November 2026</div>
+    <p>With its full roster, OKC is worth about <strong>+7.5</strong>, among the very best. In its last game, Chet Holmgren, Jalen Williams and Cason Wallace were out: the model puts their loss at about <strong>6 points</strong> that night. OKC played that game like a barely above-average team.</p>
+    <p style="margin:0">Without this adjustment, a loss by a depleted OKC would wrongly lower its true strength. With it, the model understands that the loss is explained by the absences.</p>
+  </div>
+  <p>One adjustment: the computed cost is multiplied by a coefficient β = 0.75 before use. BPM misses some contributions (defense in particular), and tests show predictions are better when it is trusted at three quarters. This coefficient is chosen on past seasons.</p>
+  <p>For <strong>future</strong> games, the model does not know who will play. It assumes each team's recent level of absences continues: a cautious assumption, which penalizes a team whose injured players are about to return.</p>
+
+  <!-- ============ STEP 5 ============ -->
+  <span class="step-tag">Step 5</span>
+  <h2>Play out the season 100,000 times</h2>
+  <p>With a strength and an uncertainty for each team, we can play out the rest of the season on a computer, drawing each game at random with the probability from step 1. The records give the standings, then we play the play-in and the four playoff rounds. We note the champion. And start again.</p>
+  <p>The simulation has two levels, to separate two kinds of uncertainty:</p>
+  <ul class="lim">
+    <li><strong>What we don't know about the teams</strong>: we draw 100 possible versions of the strengths, each within its error bar (Boston may be +6, may be +10).</li>
+    <li><strong>The randomness of games</strong>: for each of these 100 versions, we play 1,000 rest-of-seasons.</li>
+  </ul>
+  <p>The title probability is the share of the 100,000 simulated seasons a team wins. The <strong>10-90% range</strong> shows how that probability varies with the team's true strength: if it goes from 1% to 50%, we know the team is good, but not yet whether it is very good.</p>
+
+  <!-- ============ VALIDATION ============ -->
+  <h2>Does it work?</h2>
+  <p>A forecasting model must be judged on forecasts made <strong>without knowing what happened next</strong>. For each season from 2012 to 2026, the model only had access to earlier seasons, and predicted each game before it was played. Three tests.</p>
+
+  <h3>1. Game by game (18,000 games)</h3>
+  <p>The score used, <em>log-loss</em>, is a surprise penalty: if the model says 70% and the team wins, the penalty is small (0.36); if it loses, the penalty is large (1.20). A model that always says 50% scores 0.693. Lower is better. Each version of the model is compared with the previous one.</p>
+  <div class="tbl"><table>
+    <thead><tr><th>Improvement (2012-2026)</th><th>Regular season</th><th>Playoffs</th></tr></thead>
+    <tbody>
+      <tr><td>Learning home-court advantage</td><td class="n better">−0.0064 ± 0.0007</td><td class="n">—</td></tr>
+      <tr><td>Kalman filter (step 3)</td><td class="n">−0.0001 ± 0.0007</td><td class="n better">−0.0061 ± 0.0026</td></tr>
+      <tr class="hl"><td>Knowing who plays (step 4)</td><td class="n better">−0.0090 ± 0.0009</td><td class="n better">−0.0066 ± 0.0026</td></tr>
+    </tbody>
+  </table></div>
+  <p class="note">Change in average log-loss per game (negative = better) and its standard error, which measures the uncertainty of the test itself. A change means something when it clearly exceeds two standard errors. The starting model is an Elo rating, the chess method adapted to basketball.</p>
+  <p>The gains look small because a basketball game stays very uncertain: no model gets very low. Knowing who plays is the clearest improvement of the project, ten times larger than the uncertainty of the test. The gain doubles after 2020, the era of planned rest for stars, and reaches −0.021 on the 40% of games where the two teams have different absences.</p>
+
+  <h3>2. Are the error bars honest?</h3>
+  <p>An "80%" error bar should contain the true value 8 times out of 10. Test: a quarter and halfway through the season, we predict each team's average margin for the rest of the season, with its error bar, then check (about 450 team-seasons). Result: <strong>79%</strong> and <strong>77%</strong>. The error bars are reliable, very slightly too narrow.</p>
+  <p>Getting there required learning the game-to-game noise instead of fixing it: it rose from 11.4 to 14 points in fifteen years, with a faster game and more three-point shots.</p>
+  <figure>
+    <div class="chart" id="sig"></div>
+    <figcaption>Game-to-game noise (standard deviation σ, in points), learned each season on the three previous ones.</figcaption>
+  </figure>
+
+  <h3>3. The last eleven champions, seen from February 1</h3>
+  <p>The most telling test, even though it covers few cases: we go back to February 1 of each season, show the model only what had happened before, and look at the probability it gave the eventual champion.</p>
+  <figure>
+    <div class="legend"><span><i style="background:var(--accent)"></i>probability given to the eventual champion</span><span><i style="background:var(--muted)"></i>probability of the model's favorite</span></div>
+    <div class="chart" id="champs"></div>
+    <figcaption>On February 1 of each season. A single dot means the eventual champion was the favorite. Hover for details.</figcaption>
+  </figure>
+  <div class="tbl"><table id="champ-table">
+    <thead><tr><th>Season</th><th>Champion</th><th>Prob. on Feb 1</th><th>Rank</th><th>Model's favorite</th></tr></thead>
+    <tbody></tbody>
+  </table></div>
+  <div class="key">
+    <strong>Summary:</strong> the eventual champion was the favorite <strong>5 times out of 11</strong> and in the top three <strong>10 times out of 11</strong>. On average, the model gave it <strong>21%</strong>, against 3.3% for a random pick among 30 teams. The only real surprise is Toronto in 2019 (7th, 4%): Kawhi Leonard, rested throughout the season, was decisive in the playoffs.
+  </div>
+  <p class="note">Eleven seasons are too few to tell whether "21%" is exactly calibrated. This test illustrates the model; the statistical evidence is the 18,000 games above. The model without the absence adjustment gives almost the same record (favorite 4 times, top three 9 times).</p>
+
+  <!-- ============ FORECAST ============ -->
+  <h2 id="forecast">2026-27 forecast</h2>
+  <p id="fc-intro"></p>
+  <figure>
+    <div class="chart" id="title"></div>
+    <figcaption>Title probability (dot) and 10-90% range (line). Hover for details.</figcaption>
+  </figure>
+  <div id="fc-text">
+    <p><strong>Boston is the favorite mostly thanks to its conference.</strong> The East is weak: Boston has a 45% chance of reaching the Finals, against 28% for San Antonio, the best team in the West. The top four in the West will have to knock each other out.</p>
+    <p><strong>Oklahoma City, the 2025 champion, is only at 5%.</strong> With its full roster, OKC is worth +7.5, among the best. But Holmgren, J. Williams and Wallace have missed recent games, and the model carries those absences forward (step 4). If the injured players return soon, OKC will climb in the next update.</p>
+  </div>
+  <div class="tbl"><table>
+    <thead><tr><th>Team</th><th>Full-roster strength</th><th>Recent absences</th><th>Strength used</th><th>Main absentees</th></tr></thead>
+    <tbody>
+      <tr><td>Boston Celtics</td><td class="n">+7.2</td><td class="n">+1.0</td><td class="n">+8.3</td><td class="l">—</td></tr>
+      <tr><td>San Antonio Spurs</td><td class="n">+6.2</td><td class="n">+2.4</td><td class="n">+8.6</td><td class="l">De'Aaron Fox</td></tr>
+      <tr class="hl"><td>Oklahoma City Thunder</td><td class="n">+7.5</td><td class="n">−1.9</td><td class="n">+5.6</td><td class="l">Holmgren, J. Williams, Wallace</td></tr>
+      <tr><td>Minnesota Timberwolves</td><td class="n">+5.7</td><td class="n">−1.6</td><td class="n">+4.1</td><td class="l">Anthony Edwards</td></tr>
+      <tr><td>Cleveland Cavaliers</td><td class="n">+4.1</td><td class="n">0.0</td><td class="n">+4.1</td><td class="l">Mobley, Mitchell, Harden</td></tr>
+    </tbody>
+  </table></div>
+  <p class="note">In points of margin, as of November 15. "Recent absences" is an average over the last games, compared with the full roster including long-term injured players; it can be positive when the available starters absorb minutes from less useful players.</p>
+
+  <h3>Forecast log</h3>
+  <p>The same forecast is rerun on three dates, with exactly the same model. You can follow how the probabilities move as the season goes on and the error bars narrow.</p>
+  <ul class="log" id="log"></ul>
+  <figure id="evo-fig" hidden>
+    <div class="chart" id="evo"></div>
+    <figcaption>Title probability of the current favorites, from one update to the next.</figcaption>
+  </figure>
+
+  <h2>Limitations</h2>
+  <ul class="lim">
+    <li><strong>Future absences are unknown.</strong> The model knows who plays tonight, not who will be injured in April, nor when an injured player will return.</li>
+    <li><strong>The player rating (BPM) is imperfect</strong>, especially for defense.</li>
+    <li><strong>No motivation</strong>: a team losing on purpose late in the season for a better draft pick is not detected.</li>
+    <li><strong>No betting odds</strong>, on purpose: the model only uses results and statistics. Bookmakers include information it does not have.</li>
+  </ul>
+
+  <h2>Glossary</h2>
+  <dl class="gloss">
+    <dt>Margin</dt><dd>Point difference at the end of a game, from one team's point of view.</dd>
+    <dt>Strength</dt><dd>Expected average margin against an average team, on a neutral court.</dd>
+    <dt>BPM</dt><dd><em>Box Plus-Minus</em>: a player rating, in points added per 100 possessions compared with an average player.</dd>
+    <dt>Standard deviation (σ)</dt><dd>A measure of spread: how far a value typically lands from its average.</dd>
+    <dt>Regression</dt><dd>A formula whose coefficients are chosen to reproduce past data as well as possible.</dd>
+    <dt>Kalman filter</dt><dd>A method that tracks a hidden quantity from noisy measurements, keeping an estimate and its uncertainty up to date.</dd>
+    <dt>Monte Carlo</dt><dd>Computing a probability by simulating a random situation a large number of times.</dd>
+    <dt>Log-loss</dt><dd>A score for probability forecasts: the more confident a wrong forecast was, the bigger the penalty.</dd>
+    <dt>Walk-forward</dt><dd>A test where each forecast only uses data available at that time.</dd>
+  </dl>
+
+  <footer>Data: game results, advanced player stats and player-by-player box scores (Basketball Reference), seasons 2006-2027. Code in Python (numpy, pandas). Walk-forward evaluation 2012-2026.</footer>
+</div>
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
