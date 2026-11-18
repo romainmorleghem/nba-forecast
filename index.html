@@ -125,6 +125,17 @@
   </table></div>
   <p class="note">Change in average log-loss per game (negative = better) and its standard error, which measures the uncertainty of the test itself. A change means something when it clearly exceeds two standard errors. The starting model is an Elo rating, the chess method adapted to basketball.</p>
   <p>The gains look small because a basketball game stays very uncertain: no model gets very low. Knowing who plays is the clearest improvement of the project, ten times larger than the uncertainty of the test. The gain doubles after 2020, the era of planned rest for stars, and reaches −0.021 on the 40% of games where the two teams have different absences.</p>
+  <p>A simpler way to read it: <strong>how often does the model's favorite actually win?</strong></p>
+  <div class="tbl"><table>
+    <thead><tr><th>Winner picked correctly (2012-2026)</th><th>Regular season</th><th>Uneven absences</th><th>Playoffs</th></tr></thead>
+    <tbody>
+      <tr><td>Always pick the home team</td><td class="n">57.1%</td><td class="n">—</td><td class="n">—</td></tr>
+      <tr><td>Model without absences</td><td class="n">66.1%</td><td class="n">66.7%</td><td class="n">63.8%</td></tr>
+      <tr class="hl"><td>Model knowing who plays</td><td class="n better">67.2%</td><td class="n better">69.2%</td><td class="n">64.8%</td></tr>
+    </tbody>
+  </table></div>
+  <p class="note">17,891 regular-season games, 7,106 of them with clearly different absences between the two teams, and 1,258 playoff games. The playoff difference is within the noise of such a small sample.</p>
+  <p>The model picks the winner in <strong>two games out of three</strong>. Knowing who plays adds about 200 correctly picked games over fifteen seasons, and it does at least as well as the model without absences in every season. Published studies on NBA games mostly land between 65% and 70%, and often on older seasons, when home-court advantage was larger and games less random. This score is coarse, though: it counts a game called at 51% the same as one called at 90%, which is why the log-loss above remains the main measure.</p>
 
   <h3>2. Are the error bars honest?</h3>
   <p>An "80%" error bar should contain the true value 8 times out of 10. Test: a quarter and halfway through the season, we predict each team's average margin for the rest of the season, with its error bar, then check (about 450 team-seasons). Result: <strong>79%</strong> and <strong>77%</strong>. The error bars are reliable, very slightly too narrow.</p>
